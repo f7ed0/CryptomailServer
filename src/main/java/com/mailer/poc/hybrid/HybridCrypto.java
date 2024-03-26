@@ -77,10 +77,10 @@ public class HybridCrypto {
         SecretKeySpec keyspec=new SecretKeySpec(AesKey, "AES");
         cipher.init(Cipher.ENCRYPT_MODE, keyspec);
         byte[] ciphertext=Base64.getEncoder().encode(cipher.doFinal(content));
-        System.out.println("H2 output was : "+Base64.getEncoder().encodeToString(h2));
-        System.out.println("V was : "+Base64.getEncoder().encodeToString(V));
-        System.out.println("U was : "+Base64.getEncoder().encodeToString(U.toBytes()));
-        System.out.println("Key was : "+Base64.getEncoder().encodeToString(AesKey));
+        //System.out.println("H2 output was : "+Base64.getEncoder().encodeToString(h2));
+        //System.out.println("V was : "+Base64.getEncoder().encodeToString(V));
+        //System.out.println("U was : "+Base64.getEncoder().encodeToString(U.toBytes()));
+        //System.out.println("Key was : "+Base64.getEncoder().encodeToString(AesKey));
         return new CipherHybrid(U, V, ciphertext);
     }
 
@@ -93,10 +93,10 @@ public class HybridCrypto {
         Cipher cipher= Cipher.getInstance("AES/ECB/PKCS5Padding");
         SecretKeySpec keyspec = new SecretKeySpec(AesKey, "AES");
         cipher.init(Cipher.DECRYPT_MODE, keyspec);
-        System.out.println("H2 output was : "+Base64.getEncoder().encodeToString(h2));
-        System.out.println("V was : "+Base64.getEncoder().encodeToString(cipherText.V));
-        System.out.println("U was : "+Base64.getEncoder().encodeToString(cipherText.U.toBytes()));
-        System.out.println("Key was : "+Base64.getEncoder().encodeToString(AesKey));
+        //System.out.println("H2 output was : "+Base64.getEncoder().encodeToString(h2));
+        //System.out.println("V was : "+Base64.getEncoder().encodeToString(cipherText.V));
+        //System.out.println("U was : "+Base64.getEncoder().encodeToString(cipherText.U.toBytes()));
+        //System.out.println("Key was : "+Base64.getEncoder().encodeToString(AesKey));
         return cipher.doFinal(Base64.getDecoder().decode(cipherText.messageCipher));
     }
 
