@@ -85,6 +85,9 @@ public class HybridCrypto {
     }
 
     public byte[] decrypt(CipherHybrid cipherText) throws NoSuchAlgorithmException,NoSuchPaddingException,InvalidKeyException,IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException, NoPrivateKeyException {
+        if (privateKey == null) {
+            throw new NoPrivateKeyException();
+        }
         byte[] h2 = H2(this.pairing.pairing(privateKey.duplicate(),cipherText.U.duplicate())); //H2(privateKey.duplicate().mul(cipherText.U));
         byte[] AesKey = XOR(cipherText.V,h2);
         Cipher cipher= Cipher.getInstance("AES/ECB/PKCS5Padding");
