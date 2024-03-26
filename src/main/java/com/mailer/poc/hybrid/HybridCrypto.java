@@ -26,12 +26,13 @@ public class HybridCrypto {
     private Element Ppub;
     private Field G1;
     private Field Zr;
+    private Pairing pairing;
 
     HybridCrypto(Element P, Element Ppub) {
         this.privateKey = null;
         this.P = P.duplicate();
         this.Ppub = Ppub.duplicate();
-        Pairing pairing = PairingFactory.getPairing("./curves/a.properties");
+        this.pairing = PairingFactory.getPairing("./curves/a.properties");
         this.G1 = pairing.getG1();
         this.Zr = pairing.getZr();
     }
@@ -70,20 +71,28 @@ public class HybridCrypto {
         Element U = this.P.duplicate().mulZn(r);
         Element Qid = H1(id.getBytes());
         byte[] AesKey = Arrays.copyOf(this.G1.newRandomElement().toBytes(),16);
-        byte[] V = XOR(AesKey,H2(Qid.duplicate().mul(Ppub).powZn(r)));
+        byte[] h2 = H2(this.pairing.pairing(Qid.duplicate(), Ppub.duplicate()).powZn(r));//H2((Qid.duplicate().mul(Ppub)).powZn(r));
+        byte[] V = XOR(AesKey,h2);
         Cipher cipher= Cipher.getInstance("AES/ECB/PKCS5Padding");
         SecretKeySpec keyspec=new SecretKeySpec(AesKey, "AES");
         cipher.init(Cipher.ENCRYPT_MODE, keyspec);
         byte[] ciphertext=Base64.getEncoder().encode(cipher.doFinal(content));
+        System.out.println("H2 output was : "+Base64.getEncoder().encodeToString(h2));
+        System.out.println("V was : "+Base64.getEncoder().encodeToString(V));
+        System.out.println("U was : "+Base64.getEncoder().encodeToString(U.toBytes()));
         System.out.println("Key was : "+Base64.getEncoder().encodeToString(AesKey));
         return new CipherHybrid(U, V, ciphertext);
     }
 
     public byte[] decrypt(CipherHybrid cipherText) throws NoSuchAlgorithmException,NoSuchPaddingException,InvalidKeyException,IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException, NoPrivateKeyException {
-        byte[] AesKey = Arrays.copyOf(XOR(cipherText.V, H2(privateKey.duplicate().mul(cipherText.U))),16);
+        byte[] h2 = H2(this.pairing.pairing(privateKey.duplicate(),cipherText.U.duplicate())); //H2(privateKey.duplicate().mul(cipherText.U));
+        byte[] AesKey = XOR(cipherText.V,h2);
         Cipher cipher= Cipher.getInstance("AES/ECB/PKCS5Padding");
         SecretKeySpec keyspec = new SecretKeySpec(AesKey, "AES");
         cipher.init(Cipher.DECRYPT_MODE, keyspec);
+        System.out.println("H2 output was : "+Base64.getEncoder().encodeToString(h2));
+        System.out.println("V was : "+Base64.getEncoder().encodeToString(cipherText.V));
+        System.out.println("U was : "+Base64.getEncoder().encodeToString(cipherText.U.toBytes()));
         System.out.println("Key was : "+Base64.getEncoder().encodeToString(AesKey));
         return cipher.doFinal(Base64.getDecoder().decode(cipherText.messageCipher));
     }
@@ -120,6 +129,7 @@ public class HybridCrypto {
             System.exit(1);
         }
 
+        System.out.println("==============");
         
 
         try {
@@ -137,7 +147,7 @@ public class HybridCrypto {
             fos.write(c.decrypt(nc));
             fos.close();
         } catch (Exception e) {
-            System.err.println(e.getMessage());
+            System.err.println("ERROR : "+e.getMessage());
             System.exit(1);
         }
     }
