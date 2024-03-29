@@ -107,13 +107,13 @@ public class IBEServer {
         this.server.createContext("/params", new HttpHandler() {
             public void handle(HttpExchange he) throws IOException {
                 try {
-                    System.out.print(he.getRequestMethod()+" : /params");
+                    System.out.print(he.getRequestMethod()+" ("+he.getRemoteAddress()+") : /params");
                     StringBuilder sb = new StringBuilder();
                     sb.append("{\n\t'P'\t: '");
                     sb.append(IBEServer.base64it(ibe.P.toBytes()));
                     sb.append("',\n");
                     sb.append("\t'Ppub'\t: '"+IBEServer.base64it(ibe.P_pub.toBytes())+"',");
-                    sb.append("\n\t'H1'\t: 'jpbc fromHash()'");
+                    sb.append("\n\t'H1'\t: 'jpbc fromHash()',");
                     sb.append("\n\t'H2'\t: 'toByte() + SHA512'");
                     sb.append("\n}");
                     byte[] bytes = sb.toString().getBytes();
@@ -153,8 +153,10 @@ public class IBEServer {
                     }
                     byte[] pb_str = Base64.getDecoder().decode(p_str);
                     byte[] pb_pub_str = Base64.getDecoder().decode(p_pub_str);
-                    challenger.startChallenge(id, IBEServer.base64it(Arrays.copyOfRange(pairing.getG1().newRandomElement().toBytes(),0,10)) , pb_str , pb_pub_str );
-                    
+                    String chall = IBEServer.base64it(Arrays.copyOfRange(pairing.getG1().newRandomElement().toBytes(),0,10));
+                    challenger.startChallenge(id, chall , pb_str , pb_pub_str );
+                    System.out.println("chall : "+chall+"|");
+                    System.out.println("id : "+ id);
                     he.sendResponseHeaders(204, -1);
                     System.out.println("\t->\t204");
                     he.getResponseBody().close();
@@ -166,39 +168,45 @@ public class IBEServer {
 
         this.server.createContext("/chall", new HttpHandler() {
             public void handle(HttpExchange he) throws IOException {
-                System.out.println(he.getRequestMethod()+" : /chall ---------------------------");
-                byte[] bytes = he.getRequestBody().readAllBytes();
-                final Gson gson = json.create();
-                JsonObject res = gson.fromJson(new String(bytes, StandardCharsets.UTF_8), JsonObject.class );
-                String id = res.get("id").getAsString();
-                String key = res.get("key").getAsString();
-                if (!challenger.verifyChallenge(id, key)) {
-                    byte[] buffer = ("{\n\t'error' : 'INVALID KEY FOR THIS MAIL'\n}").getBytes("UTF-8");
+                try {
+                    System.out.println(he.getRequestMethod()+" : /chall ---------------------------");
+                    byte[] bytes = he.getRequestBody().readAllBytes();
+                    final Gson gson = json.create();
+                    JsonObject res = gson.fromJson(new String(bytes, StandardCharsets.UTF_8), JsonObject.class );
+                    String id = res.get("id").getAsString();
+                    String key = res.get("key").getAsString().substring(0, 16);
+                    System.out.println(key+"|");
+                    System.out.println(id+"|");
+                    if (!challenger.verifyChallenge(id, key)) {
+                        byte[] buffer = ("{\n\t'error' : 'INVALID KEY FOR THIS MAIL'\n}").getBytes("UTF-8");
+                        he.getResponseHeaders().set("content-type","application/json");
+                        he.sendResponseHeaders(400, buffer.length);
+                        he.getResponseBody().write(buffer);
+                        he.getResponseBody().close();
+                        return;
+                    }
+                    Pair<byte[],byte[]> pair = challenger.getChallenge(id).getValue1();
+                    Element Q_id = ibe.generate_QID(id.getBytes());
+                    Element D_id = ibe.generate_DID(Q_id);
+                    System.out.println("QID #####################################");
+                    System.out.println(Q_id.toString());
+                    System.out.println("DID #####################################");
+                    System.out.println(D_id.toString());
+                    Element P = pairing.getG1().newElementFromBytes(pair.getValue0());
+                    Element P_pub = pairing.getG1().newElementFromBytes(pair.getValue1());
+                    Pair<byte[],byte[]> gamal = elGamalCrypt(P, P_pub, D_id, Q_id);
+                    byte[] buffer = ("{\n\t'encr_U' : '"+IBEServer.base64it(gamal.getValue0())+"',\n\t'encr_V' : '"+IBEServer.base64it(gamal.getValue1())+"'\n}").getBytes("UTF-8");
                     he.getResponseHeaders().set("content-type","application/json");
-                    he.sendResponseHeaders(400, buffer.length);
+                    he.sendResponseHeaders(200, buffer.length);
+                    System.out.println("\t->\t200");
                     he.getResponseBody().write(buffer);
                     he.getResponseBody().close();
+                    System.out.println("----------------------------------------");
                     return;
                 }
-                Pair<byte[],byte[]> pair = challenger.getChallenge(id).getValue1();
-                Element Q_id = ibe.generate_QID(id.getBytes());
-                Element D_id = ibe.generate_DID(Q_id);
-                System.out.println("QID #####################################");
-                System.out.println(Q_id.toString());
-                System.out.println("DID #####################################");
-                System.out.println(D_id.toString());
-                Element P = pairing.getG1().newElementFromBytes(pair.getValue0());
-                Element P_pub = pairing.getG1().newElementFromBytes(pair.getValue1());
-                Pair<byte[],byte[]> gamal = elGamalCrypt(P, P_pub, D_id, Q_id);
-                byte[] buffer = ("{\n\t'encr_U' : '"+IBEServer.base64it(gamal.getValue0())+"'\n\t'encr_V' : '"+IBEServer.base64it(gamal.getValue1())+"'\n}").getBytes("UTF-8");
-                he.getResponseHeaders().set("content-type","application/json");
-                he.sendResponseHeaders(200, buffer.length);
-                System.out.println("\t->\t200");
-                he.getResponseBody().write(buffer);
-                he.sendResponseHeaders(200, buffer.length);
-                he.getResponseBody().close();
-                System.out.println("----------------------------------------");
-                return;
+                catch( Exception e) {
+                    e.printStackTrace();
+                } 
             }
         });
     }
@@ -219,11 +227,6 @@ public class IBEServer {
     }
 
     public Pair<byte[],byte[]> elGamalCrypt(Element g, Element h, Element message, Element qid ) {
-        System.out.println("g #####################################");
-        System.out.println(g);
-        System.out.println("h #####################################");
-        System.out.println(h);
-        System.out.println("#######################################");
         Element r = this.pairing.getZr().newRandomElement();
         Element U = g.duplicate().mulZn(r);
         Element V = h.duplicate().mulZn(r);
